@@ -31,7 +31,7 @@ const OnboardingPage: React.FC<OnboardingPageProps> = ({
     <div className="min-h-screen bg-black text-white flex select-none">
       <HeroSection />
       <div className="flex-1 flex flex-col p-6 lg:p-10 max-w-md mx-auto w-full relative">
-        <Logo />
+        <Logo size="lg" centered />
         <AnimatePresence mode="wait">
           {(step === 2 || step === 3 || step === 4) && (
             <motion.div 

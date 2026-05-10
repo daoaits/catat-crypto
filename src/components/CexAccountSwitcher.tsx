@@ -1,17 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronDown, Plus, RefreshCw } from 'lucide-react';
+import { ChevronDown, Plus, RefreshCw, Layers } from 'lucide-react';
 import { CexAccount, SUPPORTED_CEX } from '../constants';
+import { ALL_ACCOUNTS_ID, ALL_ACCOUNTS_OBJECT } from '../context/CexAccountContext';
 
 interface CexAccountSwitcherProps {
   selectedAccount: CexAccount | null;
   onAccountChange: (account: CexAccount) => void;
   onAddAccount: () => void;
+  refreshTrigger?: number; // Add refresh trigger prop
 }
 
 const CexAccountSwitcher: React.FC<CexAccountSwitcherProps> = ({
   selectedAccount,
   onAccountChange,
   onAddAccount,
+  refreshTrigger,
 }) => {
   const [accounts, setAccounts] = useState<CexAccount[]>([]);
   const [isOpen, setIsOpen] = useState(false);
@@ -20,7 +23,7 @@ const CexAccountSwitcher: React.FC<CexAccountSwitcherProps> = ({
 
   useEffect(() => {
     fetchAccounts();
-  }, []);
+  }, [refreshTrigger]); // Re-fetch when refreshTrigger changes
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -36,7 +39,7 @@ const CexAccountSwitcher: React.FC<CexAccountSwitcherProps> = ({
   const fetchAccounts = async () => {
     setIsLoading(true);
     try {
-      const token = localStorage.getItem('auth_token'); // Fixed: use 'auth_token'
+      const token = localStorage.getItem('auth_token');
       const response = await fetch('http://localhost:8000/api/cex-accounts', {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -45,29 +48,67 @@ const CexAccountSwitcher: React.FC<CexAccountSwitcherProps> = ({
 
       const data = await response.json();
       if (data.success) {
-        console.log('📋 Fetched accounts:', data.data); // Debug log
+        console.log('📋 Fetched accounts:', data.data);
+        
+        // Check if we have new accounts (account count increased)
+        const hadAccounts = accounts.length > 0;
+        const accountCountIncreased = data.data.length > accounts.length;
+        
         setAccounts(data.data);
         
-        // Auto-select account based on priority:
-        // 1. If parent already has selectedAccount, keep it
-        // 2. If localStorage has saved account ID, restore it
-        // 3. Otherwise, select first account
-        if (data.data.length > 0 && !selectedAccount) {
+        // Auto-select logic
+        if (data.data.length > 0) {
+          // Priority 1: Check localStorage for saved account ID (might be newly added or All Accounts)
           const savedAccountId = localStorage.getItem('selectedAccountId');
-          
           if (savedAccountId) {
-            // Try to find saved account
-            const savedAccount = data.data.find((acc: any) => acc.id === parseInt(savedAccountId));
+            const parsedId = parseInt(savedAccountId);
+            
+            // Handle All Accounts mode
+            if (parsedId === ALL_ACCOUNTS_ID) {
+              if (!selectedAccount || selectedAccount.id !== ALL_ACCOUNTS_ID) {
+                console.log('🆕 Restoring All Accounts mode from localStorage');
+                onAccountChange(ALL_ACCOUNTS_OBJECT);
+              }
+              return;
+            }
+
+            const savedAccount = data.data.find((acc: any) => acc.id === parsedId);
             if (savedAccount) {
-              console.log('✅ Restored saved account:', savedAccount.cex_display_name);
-              onAccountChange(savedAccount);
+              // If this is a new account (not currently selected), switch to it
+              if (!selectedAccount || selectedAccount.id !== savedAccount.id) {
+                console.log('🆕 Switching to saved account:', savedAccount.cex_display_name);
+                onAccountChange(savedAccount);
+                return;
+              }
+              // If already selected, keep it
+              console.log('✅ Keeping current selected account:', selectedAccount.cex_display_name);
               return;
             }
           }
           
-          // Fallback: select first account
-          console.log('📌 Auto-selecting first account:', data.data[0].cex_display_name);
-          onAccountChange(data.data[0]);
+          // Priority 2: If account count increased (new account added), select the newest one
+          if (hadAccounts && accountCountIncreased) {
+            const newestAccount = data.data[data.data.length - 1];
+            console.log('🆕 New account detected! Auto-selecting:', newestAccount.cex_display_name);
+            localStorage.setItem('selectedAccountId', newestAccount.id.toString());
+            onAccountChange(newestAccount);
+            return;
+          }
+          
+          // Priority 3: If we already have a selected account, verify it still exists
+          if (selectedAccount) {
+            const stillExists = data.data.find((acc: any) => acc.id === selectedAccount.id);
+            if (stillExists) {
+              console.log('✅ Keeping current selected account:', selectedAccount.cex_display_name);
+              return;
+            }
+          }
+          
+          // Fallback: select most recent account
+          const mostRecentAccount = data.data[data.data.length - 1];
+          console.log('📌 Auto-selecting most recent account:', mostRecentAccount.cex_display_name);
+          localStorage.setItem('selectedAccountId', mostRecentAccount.id.toString());
+          onAccountChange(mostRecentAccount);
         }
       }
     } catch (error) {
@@ -88,7 +129,16 @@ const CexAccountSwitcher: React.FC<CexAccountSwitcherProps> = ({
   };
 
   const handleAccountSelect = (account: CexAccount) => {
+    console.log('🔄 Switching to account:', account.cex_display_name);
+    localStorage.setItem('selectedAccountId', account.id.toString());
     onAccountChange(account);
+    setIsOpen(false);
+  };
+
+  const handleAllAccountsSelect = () => {
+    console.log('🔄 Switching to All Accounts mode');
+    localStorage.setItem('selectedAccountId', ALL_ACCOUNTS_ID.toString());
+    onAccountChange(ALL_ACCOUNTS_OBJECT);
     setIsOpen(false);
   };
 
@@ -132,9 +182,15 @@ const CexAccountSwitcher: React.FC<CexAccountSwitcherProps> = ({
             {/* CEX Icon */}
             <div 
               className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0"
-              style={{ backgroundColor: `${getCexColor(selectedAccount.cex_name)}20` }}
+              style={{ 
+                backgroundColor: selectedAccount.id === ALL_ACCOUNTS_ID 
+                  ? '#ef444420' 
+                  : `${getCexColor(selectedAccount.cex_name)}20` 
+              }}
             >
-              {getCexIcon(selectedAccount.cex_name) ? (
+              {selectedAccount.id === ALL_ACCOUNTS_ID ? (
+                <Layers size={18} className="text-red-500" />
+              ) : getCexIcon(selectedAccount.cex_name) ? (
                 <img 
                   src={getCexIcon(selectedAccount.cex_name)} 
                   alt={selectedAccount.cex_display_name}
@@ -170,21 +226,40 @@ const CexAccountSwitcher: React.FC<CexAccountSwitcherProps> = ({
 
       {/* Dropdown */}
       {isOpen && (
-        <div className="absolute top-full right-0 mt-2 w-72 bg-neutral-900 border border-neutral-800 rounded-lg shadow-xl z-50 overflow-hidden">
-          {/* Header */}
-          <div className="flex items-center justify-between p-3 border-b border-neutral-800">
-            <span className="text-sm font-medium text-white">Switch Account</span>
-            <button
+        <div className="absolute top-full left-0 right-0 mt-2 bg-neutral-900 border border-neutral-800 rounded-lg shadow-xl z-[100] overflow-hidden">
+          <div className="p-2 border-b border-neutral-800 flex items-center justify-between">
+            <span className="text-xs font-medium text-neutral-400">Switch Account</span>
+            <button 
               onClick={handleRefresh}
-              className="p-1 hover:bg-neutral-800 rounded transition-colors"
-              title="Refresh"
+              className="p-1 hover:bg-neutral-800 rounded-md transition-colors"
+              title="Refresh accounts"
             >
-              <RefreshCw size={14} className={`text-neutral-400 ${isLoading ? 'animate-spin' : ''}`} />
+              <RefreshCw size={14} className={`text-neutral-500 ${isLoading ? 'animate-spin' : ''}`} />
             </button>
           </div>
+          
+          <div className="max-h-[300px] overflow-y-auto">
+            {/* All Accounts Option */}
+            <button
+              onClick={handleAllAccountsSelect}
+              className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-neutral-800 transition-colors text-left ${
+                selectedAccount?.id === ALL_ACCOUNTS_ID ? 'bg-neutral-800/50' : ''
+              }`}
+            >
+              <div 
+                className="w-8 h-8 rounded-md flex items-center justify-center bg-red-500/10 flex-shrink-0"
+              >
+                <Layers size={18} className="text-red-500" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-white">All Accounts</p>
+                <p className="text-xs text-neutral-500">Unified View</p>
+              </div>
+              {selectedAccount?.id === ALL_ACCOUNTS_ID && (
+                <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
+              )}
+            </button>
 
-          {/* Account List */}
-          <div className="max-h-64 overflow-y-auto">
             {accounts.map((account) => (
               <button
                 key={account.id}

@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import { Menu, X } from "lucide-react";
 import FeaturesDropdown from "./FeaturesDropdown";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
 
 interface NavbarProps {
   isMenuOpen: boolean;
@@ -15,13 +14,6 @@ interface NavbarProps {
 
 export default function Navbar({ isMenuOpen, setIsMenuOpen, currentPage, setCurrentPage, onLogin, onGetStarted }: NavbarProps) {
   const { t, i18n } = useTranslation();
-  const navigate = useNavigate();
-
-  const handleNavigate = (page: string) => {
-    const path = page === 'home' ? '/' : `/${page}`;
-    navigate(path);
-    setIsMenuOpen(false);
-  };
 
   const toggleLanguage = () => {
     const newLang = i18n.language === 'en' ? 'id' : 'en';
@@ -31,7 +23,7 @@ export default function Navbar({ isMenuOpen, setIsMenuOpen, currentPage, setCurr
   return (
     <nav className="fixed top-0 inset-x-0 z-50 bg-[#050505]/95 backdrop-blur-md border-b border-white/5">
       <div className="max-w-[1200px] mx-auto px-6 h-20 flex items-center justify-between">
-        <div className="flex items-center gap-3 cursor-pointer" onClick={(e) => { e.preventDefault(); handleNavigate('home'); }}>
+        <div className="flex items-center gap-3 cursor-pointer" onClick={(e) => { e.preventDefault(); setCurrentPage('home'); setIsMenuOpen(false); }}>
           <div className="w-8 h-8 relative">
             <div className="absolute inset-0 bg-white rounded-full flex items-center justify-center">
               <div className="w-4 h-4 bg-[#050505] rounded-full" />
@@ -48,22 +40,22 @@ export default function Navbar({ isMenuOpen, setIsMenuOpen, currentPage, setCurr
         <div className="hidden md:flex items-center gap-8 h-full">
           <a
             href="#"
-            onClick={(e) => { e.preventDefault(); handleNavigate('home'); }}
+            onClick={(e) => { e.preventDefault(); setCurrentPage('home'); }}
             className={`text-[13px] font-semibold h-full flex items-center transition-colors ${currentPage === 'home' ? 'text-[#E26A59] border-b-2 border-[#E26A59]' : 'text-neutral-400 hover:text-white border-b-2 border-transparent'}`}
           >
             {t('nav.home')}
           </a>
-          <FeaturesDropdown handleNavigate={handleNavigate} />
+          <FeaturesDropdown setCurrentPage={setCurrentPage} />
           <a
             href="#"
-            onClick={(e) => { e.preventDefault(); handleNavigate('contact'); }}
+            onClick={(e) => { e.preventDefault(); setCurrentPage('contact'); }}
             className={`text-[13px] font-semibold h-full flex items-center transition-colors ${currentPage === 'contact' ? 'text-[#E26A59] border-b-2 border-[#E26A59]' : 'text-neutral-400 hover:text-white border-b-2 border-transparent'}`}
           >
             {t('nav.contact')}
           </a>
           <a
             href="#"
-            onClick={(e) => { e.preventDefault(); handleNavigate('about'); }}
+            onClick={(e) => { e.preventDefault(); setCurrentPage('about'); }}
             className={`text-[13px] font-semibold h-full flex items-center transition-colors ${currentPage === 'about' ? 'text-[#E26A59] border-b-2 border-[#E26A59]' : 'text-neutral-400 hover:text-white border-b-2 border-transparent'}`}
           >
             {t('nav.about')}
@@ -128,28 +120,28 @@ export default function Navbar({ isMenuOpen, setIsMenuOpen, currentPage, setCurr
           </button>
           <a
             href="#"
-            onClick={(e) => { e.preventDefault(); handleNavigate('home'); }}
+            onClick={(e) => { e.preventDefault(); setCurrentPage('home'); setIsMenuOpen(false); }}
             className={`text-sm font-semibold transition-colors ${currentPage === 'home' ? 'text-[#E26A59]' : 'text-neutral-400 hover:text-white'}`}
           >
             {t('nav.home')}
           </a>
           <a
             href="#"
-            onClick={(e) => { e.preventDefault(); handleNavigate('home'); }}
+            onClick={(e) => { e.preventDefault(); setCurrentPage('home'); setIsMenuOpen(false); }}
             className={`text-sm font-semibold transition-colors text-neutral-400 hover:text-white`}
           >
             {t('nav.features')}
           </a>
           <a
             href="#"
-            onClick={(e) => { e.preventDefault(); handleNavigate('contact'); }}
+            onClick={(e) => { e.preventDefault(); setCurrentPage('contact'); setIsMenuOpen(false); }}
             className={`text-sm font-semibold transition-colors ${currentPage === 'contact' ? 'text-[#E26A59]' : 'text-neutral-400 hover:text-white'}`}
           >
             {t('nav.contact')}
           </a>
           <a
             href="#"
-            onClick={(e) => { e.preventDefault(); handleNavigate('about'); }}
+            onClick={(e) => { e.preventDefault(); setCurrentPage('about'); setIsMenuOpen(false); }}
             className={`text-sm font-semibold transition-colors ${currentPage === 'about' ? 'text-[#E26A59]' : 'text-neutral-400 hover:text-white'}`}
           >
             {t('nav.about')}

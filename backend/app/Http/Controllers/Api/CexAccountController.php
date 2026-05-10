@@ -375,6 +375,146 @@ class CexAccountController extends Controller
     }
 
     /**
+     * Sync all CEX accounts (Unified View)
+     * 
+     * POST /api/cex-accounts/sync-all
+     */
+    public function syncAll(Request $request)
+    {
+        try {
+            $user = $request->user();
+            $accounts = UserCexAccount::where('user_id', $user->id)
+                ->where('is_active', true)
+                ->get();
+
+            if ($accounts->isEmpty()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'No active CEX accounts found',
+                    'data' => null
+                ]);
+            }
+
+            // Performance Optimization: Check if we can use "Fast Mode"
+            // Fast mode only aggregates data already in DB without calling external APIs
+            $fastMode = $request->boolean('fast_mode', false);
+            
+            // Auto-detect fast mode: if any account was synced in the last 5 minutes, 
+            // and we didn't explicitly ask for a full sync, use fast mode for efficiency.
+            if (!$fastMode && !$request->boolean('force_sync', false)) {
+                $recentlySynced = UserCexAccount::where('user_id', $user->id)
+                    ->where('last_synced_at', '>=', now()->subMinutes(5))
+                    ->exists();
+                
+                if ($recentlySynced) {
+                    $fastMode = true;
+                    Log::info("Unified View: Using Fast Mode (recently synced)");
+                }
+            }
+
+            $aggregatedResults = [
+                'totalBalance' => 0,
+                'activeDeployments' => [],
+            ];
+
+            if (!$fastMode) {
+                foreach ($accounts as $account) {
+                    try {
+                        $exchangeService = $this->getExchangeService($account->cex_name);
+                        if (!$exchangeService) continue;
+
+                        $result = $exchangeService->syncAccount(
+                            $account->api_key,
+                            $account->api_secret,
+                            $account->api_passphrase,
+                            $user->id,
+                            $account->id
+                        );
+
+                        $account->last_synced_at = now();
+                        $account->save();
+
+                        // Aggregate balance
+                        $balance = (float) str_replace(['$', ','], '', $result['totalBalance'] ?? '0');
+                        $aggregatedResults['totalBalance'] += $balance;
+
+                        // Aggregate active deployments (live open positions)
+                        if (isset($result['activeDeployments']) && is_array($result['activeDeployments'])) {
+                            foreach ($result['activeDeployments'] as $deployment) {
+                                // Add exchange name to each deployment for clarity in unified view
+                                $deployment['exchange'] = $account->cex_display_name;
+                                $aggregatedResults['activeDeployments'][] = $deployment;
+                            }
+                        }
+                    } catch (\Exception $e) {
+                        Log::error("Failed to sync account {$account->id}: " . $e->getMessage());
+                    }
+                }
+            } else {
+                foreach ($accounts as $account) {
+                    try {
+                        $exchangeService = $this->getExchangeService($account->cex_name);
+                        if (!$exchangeService) continue;
+
+                        $result = $exchangeService->syncAccount(
+                            $account->api_key,
+                            $account->api_secret,
+                            $account->api_passphrase,
+                            $user->id,
+                            $account->id
+                        );
+                        
+                        $balance = (float) str_replace(['$', ','], '', $result['totalBalance'] ?? '0');
+                        $aggregatedResults['totalBalance'] += $balance;
+
+                        // Even in fast mode, we want to see current open positions
+                        if (isset($result['activeDeployments']) && is_array($result['activeDeployments'])) {
+                            foreach ($result['activeDeployments'] as $deployment) {
+                                $deployment['exchange'] = $account->cex_display_name;
+                                $aggregatedResults['activeDeployments'][] = $deployment;
+                            }
+                        }
+                    } catch (\Exception $e) {
+                        Log::error("Fast Mode sync failed for {$account->id}: " . $e->getMessage());
+                    }
+                }
+            }
+
+            // After syncing all accounts, fetch all trades and calculate aggregated metrics
+            $allTrades = \App\Models\Trade::where('user_id', $user->id)->get();
+            
+            // Transform Model to array compatible with TradeMetricsCalculator
+            $formattedTrades = $allTrades->map(function($trade) {
+                return [
+                    'realizedPnl' => $trade->pnl_amount,
+                    'timestamp' => strtotime($trade->trade_date) * 1000,
+                ];
+            })->toArray();
+
+            $metrics = \App\Services\Exchanges\TradeMetricsCalculator::calculate(
+                $formattedTrades, 
+                $aggregatedResults['totalBalance']
+            );
+
+            // Add aggregated data
+            $metrics['totalBalance'] = '$' . number_format($aggregatedResults['totalBalance'], 2);
+            $metrics['activeDeployments'] = $aggregatedResults['activeDeployments'];
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Unified sync successful',
+                'data' => $metrics
+            ]);
+        } catch (\Exception $e) {
+            Log::error("Unified sync failed: " . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Unified sync failed: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Get exchange service instance
      */
     private function getExchangeService($cexName)

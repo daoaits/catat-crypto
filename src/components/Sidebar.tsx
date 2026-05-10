@@ -29,7 +29,7 @@ const Sidebar: React.FC<SidebarProps> = ({ plan, onNewTradeClick }) => {
   return (
     <div className="w-72 bg-black border-r border-neutral-900 flex flex-col h-screen sticky top-0 overflow-y-auto scrollbar-hide">
       <div className="p-6">
-        <Logo />
+        <Logo size="lg" />
         
         <button 
           onClick={onNewTradeClick}

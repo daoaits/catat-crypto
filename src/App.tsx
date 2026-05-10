@@ -261,29 +261,19 @@ function AppContent() {
           plan: data.profile.subscription_plan,
           broker: data.profile.broker,
           method: data.profile.sync_method,
-          apiKey: data.profile.api_key,
-          apiSecret: data.profile.api_secret,
-          apiPassphrase: data.profile.api_passphrase || '',
         });
 
-        // If they already have API keys, try to sync immediately
-        if (data.profile.api_key && data.profile.api_secret) {
-          setIsConnecting(true);
-          try {
-            const portData = await apiService.connectBrokerAPI(data.profile.api_key, data.profile.api_secret, data.profile.broker, data.profile.api_passphrase);
-            setPortfolioData(portData);
-            return '/dashboard';
-          } catch (e) {
-            console.error("Auto-sync failed on login:", e);
-            return '/dashboard';
-          } finally {
-            setIsConnecting(false);
-          }
+        // ✅ Check if user has CEX accounts (new multi-CEX system)
+        if (data.has_cex_accounts) {
+          // User has CEX accounts, go to dashboard
+          return '/dashboard';
         } else {
+          // User has profile but no CEX accounts, go to onboarding step 5 (broker connection)
           setStep(5);
           return '/onboarding';
         }
       } else {
+        // No profile yet, start onboarding from step 2
         setStep(2);
         return '/onboarding';
       }

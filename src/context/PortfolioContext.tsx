@@ -4,6 +4,8 @@ import { PortfolioData } from '../services/apiService';
 interface PortfolioContextType {
   portfolioData: PortfolioData | null;
   setPortfolioData: (data: PortfolioData | null) => void;
+  lastSyncedAccountId: number | null;
+  setLastSyncedAccountId: (id: number | null) => void;
   userName: string;
   setUserName: (name: string) => void;
   isSynced: boolean;
@@ -17,6 +19,14 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
     const saved = localStorage.getItem('portfolio_data');
     return saved ? JSON.parse(saved) : null;
   });
+  
+  const [lastSyncedAccountId, setLastSyncedAccountIdState] = useState<number | null>(() => {
+    const saved = localStorage.getItem('lastSyncedAccountId');
+    if (!saved || saved === 'null' || saved === 'undefined') return null;
+    const parsed = parseInt(saved);
+    return isNaN(parsed) ? null : parsed;
+  });
+
   const [userName, setUserName] = useState<string>(() => localStorage.getItem('trader_name') || '');
 
   const handleSetPortfolioData = (data: PortfolioData | null) => {
@@ -28,6 +38,15 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   };
 
+  const handleSetLastSyncedAccountId = (id: number | null) => {
+    setLastSyncedAccountIdState(id);
+    if (id !== null) {
+      localStorage.setItem('lastSyncedAccountId', id.toString());
+    } else {
+      localStorage.removeItem('lastSyncedAccountId');
+    }
+  };
+
   const handleSetUserName = (name: string) => {
     setUserName(name);
     localStorage.setItem('trader_name', name);
@@ -35,8 +54,10 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const logout = () => {
     setPortfolioData(null);
+    setLastSyncedAccountIdState(null);
     setUserName('');
     localStorage.removeItem('portfolio_data');
+    localStorage.removeItem('lastSyncedAccountId');
     localStorage.removeItem('trader_name');
     localStorage.removeItem('user_form_data');
     localStorage.removeItem('app_step');
@@ -49,6 +70,8 @@ export const PortfolioProvider: React.FC<{ children: ReactNode }> = ({ children 
       value={{ 
         portfolioData, 
         setPortfolioData: handleSetPortfolioData,
+        lastSyncedAccountId,
+        setLastSyncedAccountId: handleSetLastSyncedAccountId,
         userName,
         setUserName: handleSetUserName,
         isSynced: portfolioData !== null,

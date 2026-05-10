@@ -33,16 +33,16 @@ const AuthPage: React.FC<AuthPageProps> = ({ formData, updateFormData, handleReg
           message: `Welcome, ${formData.name}! Let's set up your profile.` 
         });
         setShowSuccess(true);
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise(resolve => setTimeout(resolve, 800)); // Reduced from 2000ms to 800ms
         navigate('/onboarding');
       } else {
         const dest = await handleLogin(formData.email, formData.password);
         setSuccessInfo({ 
           title: 'Login Successful!', 
-          message: `Welcome back, ${formData.name}! Redirecting...` 
+          message: `Welcome back! Redirecting...` 
         });
         setShowSuccess(true);
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise(resolve => setTimeout(resolve, 600)); // Further reduced to 600ms
         navigate(dest);
       }
     } catch (err: any) {
@@ -80,7 +80,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ formData, updateFormData, handleReg
                   <motion.div 
                     initial={{ x: '-100%' }}
                     animate={{ x: '0%' }}
-                    transition={{ duration: 1.8, ease: "linear" }}
+                    transition={{ duration: 0.5, ease: "linear" }}
                     className="w-full h-full bg-green-500"
                   />
                 </div>
@@ -90,7 +90,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ formData, updateFormData, handleReg
         )}
       </AnimatePresence>
       <div className="flex-1 flex flex-col p-6 lg:p-12 max-w-md mx-auto w-full relative justify-center">
-        <Logo />
+        <Logo size="lg" centered />
         <motion.div 
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}

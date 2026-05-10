@@ -48,23 +48,47 @@ class BinanceExchange implements ExchangeInterface
             // Limit to top 50 symbols to avoid rate limits
             $symbols = array_slice($symbols, 0, 50);
 
-            // Fetch trades for each symbol
-            foreach ($symbols as $symbol) {
-                try {
+            // ⚡ PARALLEL FETCH: Process symbols in batches for better performance
+            $batchSize = 10; // Fetch 10 symbols at once
+            $symbolBatches = array_chunk($symbols, $batchSize);
+            
+            Log::info("Binance: Fetching trades for " . count($symbols) . " symbols in " . count($symbolBatches) . " parallel batches");
+
+            foreach ($symbolBatches as $batchIndex => $batch) {
+                // Create parallel requests for this batch
+                $promises = [];
+                
+                foreach ($batch as $symbol) {
+                    $timestamp = round(microtime(true) * 1000); // Fresh timestamp for each request
                     $queryString = 'symbol=' . $symbol . '&startTime=' . $startTime . '&recvWindow=' . $recvWindow . '&timestamp=' . $timestamp;
                     $signature = hash_hmac('sha256', $queryString, $apiSecret);
 
-                    $response = Http::withHeaders([
+                    // Store promise with symbol as key
+                    $promises[$symbol] = Http::withHeaders([
                         'X-MBX-APIKEY' => $apiKey
-                    ])->get("{$this->baseUrl}/api/v3/myTrades", [
+                    ])->async()->get("{$this->baseUrl}/api/v3/myTrades", [
                         'symbol' => $symbol,
                         'startTime' => $startTime,
                         'recvWindow' => $recvWindow,
                         'timestamp' => $timestamp,
                         'signature' => $signature
                     ]);
+                }
 
-                    if ($response->successful()) {
+                // Wait for all requests in this batch to complete
+                $responses = [];
+                foreach ($promises as $symbol => $promise) {
+                    try {
+                        $responses[$symbol] = $promise->wait();
+                    } catch (\Exception $e) {
+                        Log::warning("Binance: Failed to fetch trades for {$symbol}: " . $e->getMessage());
+                        $responses[$symbol] = null;
+                    }
+                }
+
+                // Process responses
+                foreach ($responses as $symbol => $response) {
+                    if ($response && $response->successful()) {
                         $symbolTrades = $response->json();
                         
                         foreach ($symbolTrades as $trade) {
@@ -89,13 +113,11 @@ class BinanceExchange implements ExchangeInterface
                             ];
                         }
                     }
+                }
 
-                    // Small delay to avoid rate limits
-                    usleep(100000); // 100ms
-
-                } catch (\Exception $e) {
-                    Log::warning("Binance: Failed to fetch trades for {$symbol}: " . $e->getMessage());
-                    continue;
+                // Small delay between batches to respect rate limits
+                if ($batchIndex < count($symbolBatches) - 1) {
+                    usleep(200000); // 200ms between batches (reduced from 100ms per symbol)
                 }
             }
 

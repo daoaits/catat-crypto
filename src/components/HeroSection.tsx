@@ -1,5 +1,6 @@
 import React from 'react';
 import { Lock, Clock, BarChart } from 'lucide-react';
+import logoAsset from '../assets/logo-asset.png';
 
 const HeroSection = () => (
   <div className="hidden lg:flex flex-col justify-center p-12 bg-neutral-950 relative overflow-hidden border-r border-neutral-800 lg:w-[55%] xl:w-[58%]">
@@ -10,7 +11,13 @@ const HeroSection = () => (
     </div>
 
     <div className="relative z-10">
-      <h1 className="text-6xl font-black text-white/10 mb-2 leading-none uppercase select-none">Catat Crypto</h1>
+      <div className="mb-4 opacity-20">
+        <img 
+          src={logoAsset} 
+          alt="Catat Crypto" 
+          className="h-32 w-auto object-contain"
+        />
+      </div>
       <h2 className="text-4xl font-medium text-white mb-6 tracking-tight">The Opportunity is You</h2>
       
       {/* Visual Accent - Mocking the screenshots */}

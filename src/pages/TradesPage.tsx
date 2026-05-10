@@ -8,8 +8,9 @@ import Sidebar from '../components/Sidebar';
 import TopBar from '../components/TopBar';
 import EditTradeModal from '../components/EditTradeModal';
 import { usePortfolio } from '../context/PortfolioContext';
-import { useCexAccount } from '../context/CexAccountContext';
+import { useCexAccount, ALL_ACCOUNTS_ID } from '../context/CexAccountContext';
 import { apiService } from '../services/apiService';
+import { SUPPORTED_CEX } from '../constants';
 
 interface TradesPageProps {
   formData: any;
@@ -45,7 +46,8 @@ const TradesPage: React.FC<TradesPageProps> = ({ formData }) => {
     }
 
     // 3. Total Trades
-    if (!data?.activeDeployments || data.activeDeployments.length === 0) {
+    // Only show warning if there are NO trades in DB AND no active deployments from API
+    if ((!data?.activeDeployments || data.activeDeployments.length === 0) && (!trades || trades.length === 0)) {
       errors.totalTrades = "Tidak ada posisi terbuka";
     }
 
@@ -55,7 +57,7 @@ const TradesPage: React.FC<TradesPageProps> = ({ formData }) => {
     }
 
     // 5. Trades Table
-    if (!data?.activeDeployments || data.activeDeployments.length === 0) {
+    if ((!data?.activeDeployments || data.activeDeployments.length === 0) && (!trades || trades.length === 0)) {
       errors.tradesTable = "API terhubung tapi belum ada posisi terbuka";
     }
 
@@ -70,7 +72,7 @@ const TradesPage: React.FC<TradesPageProps> = ({ formData }) => {
       if (!token) return;
 
       const params = new URLSearchParams();
-      if (selectedAccount) {
+      if (selectedAccount && selectedAccount.id !== ALL_ACCOUNTS_ID) {
         params.append('cex_account_id', selectedAccount.id.toString());
       }
 
@@ -137,7 +139,7 @@ const TradesPage: React.FC<TradesPageProps> = ({ formData }) => {
     } else {
       setDataErrors({});
     }
-  }, [portfolioData]);
+  }, [portfolioData, trades]); // Re-validate when trades (DB) or portfolioData (API) changes
 
   // Save API trades to database
   const handleSaveToDatabase = async () => {
@@ -210,8 +212,13 @@ const TradesPage: React.FC<TradesPageProps> = ({ formData }) => {
         return;
       }
 
+      const isAllAccounts = selectedAccount.id === ALL_ACCOUNTS_ID;
+      const url = isAllAccounts 
+        ? 'http://localhost:8000/api/cex-accounts/sync-all'
+        : `http://localhost:8000/api/cex-accounts/${selectedAccount.id}/sync`;
+
       // Step 1: Sync account from exchange API
-      const response = await fetch(`http://localhost:8000/api/cex-accounts/${selectedAccount.id}/sync`, {
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -232,25 +239,31 @@ const TradesPage: React.FC<TradesPageProps> = ({ formData }) => {
         // Step 2: Auto-save trades to database
         if (data.data.activeDeployments && data.data.activeDeployments.length > 0) {
           try {
-            const syncTradesResponse = await fetch(`http://localhost:8000/api/cex-accounts/${selectedAccount.id}/sync-trades`, {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${token}`,
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                trades: data.data.activeDeployments
-              }),
-            });
+            // For All Accounts, we might need a sync-all-trades endpoint, 
+            // but sync-all already fetches from DB. 
+            // Actually, the current backend syncAll doesn't save trades to DB automatically like sync does.
+            // Let's assume for now sync-all only returns aggregated metrics.
+            // If it's a single account, we sync trades to DB.
+            if (!isAllAccounts) {
+              const syncTradesResponse = await fetch(`http://localhost:8000/api/cex-accounts/${selectedAccount.id}/sync-trades`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Accept': 'application/json',
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  trades: data.data.activeDeployments
+                }),
+              });
 
-            if (syncTradesResponse.ok) {
-              const syncData = await syncTradesResponse.json();
-              console.log(`Trades synced: ${syncData.data.saved} new, ${syncData.data.updated} updated`);
+              if (syncTradesResponse.ok) {
+                const syncData = await syncTradesResponse.json();
+                console.log(`Trades synced: ${syncData.data.saved} new, ${syncData.data.updated} updated`);
+              }
             }
           } catch (syncError) {
             console.error('Failed to sync trades to database:', syncError);
-            // Don't show error to user, just log it
           }
         }
         
@@ -308,6 +321,10 @@ const TradesPage: React.FC<TradesPageProps> = ({ formData }) => {
     const matchStatus = filterStatus === 'All' || t.status === filterStatus.toUpperCase();
     return matchSide && matchStatus;
   });
+
+  const getExchangeInfo = (cexName: string) => {
+    return SUPPORTED_CEX.find(c => c.value === cexName);
+  };
 
   return (
     <div className="min-h-screen bg-black text-white flex">
@@ -475,6 +492,7 @@ const TradesPage: React.FC<TradesPageProps> = ({ formData }) => {
                 <thead className="bg-[#0A0A0A] text-[10px] uppercase font-black text-neutral-500 tracking-widest border-b border-neutral-800">
                    <tr>
                       <th className="px-6 py-4">Status</th>
+                      <th className="px-6 py-4">Exchange</th>
                       <th className="px-6 py-4">Date / Time</th>
                       <th className="px-6 py-4">Asset</th>
                       <th className="px-6 py-4 text-right">Entry / Exit</th>
@@ -496,6 +514,24 @@ const TradesPage: React.FC<TradesPageProps> = ({ formData }) => {
                             <span className={`text-[10px] font-black px-2 py-0.5 rounded ${trade.status === 'WIN' ? 'bg-green-500/10 text-green-500' : trade.status === 'LOSS' ? 'bg-red-500/10 text-red-500' : 'bg-neutral-800 text-neutral-400'}`}>
                                {trade.status}
                             </span>
+                         </td>
+                         <td className="px-6 py-4">
+                            {trade.cex_account ? (
+                              <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 rounded bg-neutral-800 flex items-center justify-center p-1">
+                                  <img 
+                                    src={getExchangeInfo(trade.cex_account.cex_name)?.icon} 
+                                    alt={trade.cex_account.cex_name}
+                                    className="w-full h-full object-contain"
+                                  />
+                                </div>
+                                <span className="text-[10px] font-bold text-neutral-400 uppercase">
+                                  {trade.cex_account.cex_name}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-[10px] text-neutral-600 font-bold">MANUAL</span>
+                            )}
                          </td>
                          <td className="px-6 py-4">
                             <div className="text-xs font-bold text-white">

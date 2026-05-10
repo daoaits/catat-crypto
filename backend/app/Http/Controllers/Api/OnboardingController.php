@@ -127,11 +127,15 @@ class OnboardingController extends Controller
         $token = $user->createToken('auth_token')->plainTextToken;
 
         $profile = UserProfile::where('user_id', $user->id)->first();
+        
+        // ✅ Check if user has any CEX accounts
+        $hasCexAccounts = UserCexAccount::where('user_id', $user->id)->exists();
 
         return response()->json([
             'message' => 'Login successful',
             'user' => ['id' => $user->id, 'name' => $user->name, 'email' => $user->email],
             'profile' => $profile,
+            'has_cex_accounts' => $hasCexAccounts, // ✅ NEW: Indicate if user has CEX accounts
             'token' => $token
         ]);
     }

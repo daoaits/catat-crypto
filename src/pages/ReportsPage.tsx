@@ -25,7 +25,8 @@ import {
 } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
 import TopBar from '../components/TopBar';
-import { useCexAccount } from '../context/CexAccountContext';
+import { useCexAccount, ALL_ACCOUNTS_ID } from '../context/CexAccountContext';
+import { useTranslation } from 'react-i18next';
 
 import { usePortfolio } from '../context/PortfolioContext';
 import { apiService } from '../services/apiService';
@@ -35,8 +36,9 @@ interface ReportsPageProps {
 }
 
 const ReportsPage: React.FC<ReportsPageProps> = ({ formData }) => {
-  const { portfolioData, setPortfolioData } = usePortfolio();
+  const { portfolioData, setPortfolioData, lastSyncedAccountId, setLastSyncedAccountId } = usePortfolio();
   const { selectedAccount } = useCexAccount();
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState('Overview');
   const [selectedDate, setSelectedDate] = useState<any | null>(null);
   const [isEditingDate, setIsEditingDate] = useState(false);
@@ -44,6 +46,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ formData }) => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncError, setSyncError] = useState('');
   const [dataErrors, setDataErrors] = useState<Record<string, string>>({});
+  const isFirstMount = React.useRef(true);
   
   // Journal state
   const [journalRemarks, setJournalRemarks] = useState('');
@@ -130,7 +133,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ formData }) => {
     }
   }, [portfolioData]);
 
-  const handleResync = async () => {
+  const handleResync = async (showToast: boolean = true) => {
     if (!selectedAccount) {
       setSyncError('No CEX account selected. Please select an account from the dropdown.');
       return;
@@ -146,7 +149,12 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ formData }) => {
         return;
       }
 
-      const response = await fetch(`http://localhost:8000/api/cex-accounts/${selectedAccount.id}/sync`, {
+      const isAllAccounts = selectedAccount.id === ALL_ACCOUNTS_ID;
+      const url = isAllAccounts 
+        ? 'http://localhost:8000/api/cex-accounts/sync-all'
+        : `http://localhost:8000/api/cex-accounts/${selectedAccount.id}/sync`;
+
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -162,6 +170,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ formData }) => {
       const data = await response.json();
       if (data.success) {
         setPortfolioData(data.data);
+        setLastSyncedAccountId(selectedAccount.id);
         setSyncError('');
       } else {
         throw new Error(data.message || 'Sync failed');
@@ -172,6 +181,39 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ formData }) => {
       setIsSyncing(false);
     }
   };
+
+  // Auto-sync logic (shared with DashboardPage)
+  React.useEffect(() => {
+    if (selectedAccount && !isSyncing) {
+      // Skip sync if we already have data for THIS exact account
+      if (portfolioData && lastSyncedAccountId === selectedAccount.id) {
+        console.log('✅ ReportsPage: Using cached data for account:', selectedAccount.cex_display_name);
+        validatePortfolioData(portfolioData);
+        isFirstMount.current = false;
+        return;
+      }
+
+      // First mount: Sync only if no data OR data is for different account
+      if (isFirstMount.current) {
+        isFirstMount.current = false;
+        
+        if (portfolioData && lastSyncedAccountId === selectedAccount.id) {
+          console.log('✅ ReportsPage: Found valid data on first mount, skipping sync');
+          return;
+        }
+
+        console.log('🔄 ReportsPage: Initial auto-sync for account:', selectedAccount.cex_display_name);
+        handleResync(false);
+        return;
+      }
+      
+      // Subsequent changes (manual account switch): Sync if account actually changed
+      if (selectedAccount.id !== lastSyncedAccountId) {
+        console.log('🔄 ReportsPage: Account changed, syncing:', selectedAccount.cex_display_name);
+        handleResync(true);
+      }
+    }
+  }, [selectedAccount?.id, lastSyncedAccountId]);
 
   const handleSaveJournal = async () => {
     if (!selectedDate || !formData.token) {
@@ -218,7 +260,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ formData }) => {
     if (!files) return;
 
     // Convert files to base64
-    Array.from(files).forEach(file => {
+    Array.from(files).forEach((file: File) => {
       if (file.size > 5 * 1024 * 1024) {
         setJournalSaveError('Screenshot size must be less than 5MB');
         return;

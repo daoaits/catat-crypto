@@ -38,11 +38,11 @@ import Footer from "../components/landing/Footer";
 
 export default function LandingPage() {
   const { t, i18n } = useTranslation();
+  const isId = i18n.language === 'id';
   const navigate = useNavigate();
   const location = useLocation();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState('home');
-  const isId = i18n.language === 'id';
 
   useEffect(() => {
     const path = location.pathname.split('/')[1] || 'home';

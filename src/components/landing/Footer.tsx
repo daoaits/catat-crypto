@@ -1,7 +1,6 @@
 import React from 'react';
 import { Share2, Globe, MessageSquare } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
 interface FooterProps {
   setCurrentPage: (page: string) => void;
@@ -9,11 +8,9 @@ interface FooterProps {
 
 export default function Footer({ setCurrentPage }: FooterProps) {
   const { t, i18n } = useTranslation();
-  const navigate = useNavigate();
 
   const handleNavigate = (page: string) => {
-    const path = page === 'home' ? '/' : `/${page}`;
-    navigate(path);
+    setCurrentPage(page);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 

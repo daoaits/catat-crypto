@@ -1,6 +1,7 @@
 import React from 'react';
 import { Lightbulb, TrendingDown, HelpCircle, FileText, EyeOff, ShieldCheck, CheckCircle2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import contact1 from '../../assets/contact1.png';
 
 export default function AboutUs() {
   const { t, i18n } = useTranslation();
@@ -56,8 +57,8 @@ export default function AboutUs() {
 
             {/* Right (Image) */}
             <div className="w-full md:w-[45%] md:pl-12 lg:pl-20 mt-16 md:mt-0 z-10">
-              <div className="relative bg-[#1A0505] border border-[#2F0B0B] rounded-3xl overflow-hidden aspect-[4/3] group shadow-2xl">
-                <img src="https://images.unsplash.com/photo-1640340434806-27af115f81bb?q=80&w=800&auto=format&fit=crop" alt="The Founders" className="w-full h-full object-cover mix-blend-luminosity opacity-40 group-hover:opacity-60 transition-opacity" />
+              <div className="relative bg-[#1A0505] border-2 border-[#E26A59]/50 rounded-3xl overflow-hidden aspect-[4/3] group shadow-[0_0_30px_rgba(226,106,89,0.4),0_0_60px_rgba(226,106,89,0.2)] hover:shadow-[0_0_40px_rgba(226,106,89,0.6),0_0_80px_rgba(226,106,89,0.3)] transition-all duration-500">
+                <img src={contact1} alt="The Founders" className="w-full h-full object-cover" />
                 
                 {/* Abstract shape overlay reminiscent of design */}
                 <div className="absolute top-0 right-0 w-32 h-32 bg-[#E26A59] rounded-full blur-[80px] opacity-20 pointer-events-none" />

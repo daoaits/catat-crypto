@@ -18,7 +18,7 @@ class TradeJournalController extends Controller
         $validator = Validator::make($request->all(), [
             'year' => 'required|integer|min:2020|max:2100',
             'month' => 'required|integer|min:1|max:12',
-            'cex_account_id' => 'nullable|integer|exists:user_cex_accounts,id',
+            'cex_account_id' => 'nullable|integer', // Removed exists check to allow -1
         ]);
 
         if ($validator->fails()) {
@@ -32,15 +32,15 @@ class TradeJournalController extends Controller
         $user = Auth::user();
         $year = $request->input('year');
         $month = $request->input('month');
-        $cexAccountId = $request->input('cex_account_id');
+        $cexAccountId = (int) $request->input('cex_account_id');
 
         // Build query
         $query = TradeJournal::where('user_id', $user->id)
             ->whereYear('trade_date', $year)
             ->whereMonth('trade_date', $month);
 
-        // Filter by CEX account if provided
-        if ($cexAccountId) {
+        // Filter by CEX account if provided and not "All Accounts" (-1)
+        if ($cexAccountId && $cexAccountId !== -1) {
             $query->where('cex_account_id', $cexAccountId);
         }
 
@@ -59,7 +59,7 @@ class TradeJournalController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'date' => 'required|date',
-            'cex_account_id' => 'nullable|integer|exists:user_cex_accounts,id',
+            'cex_account_id' => 'nullable|integer',
         ]);
 
         if ($validator->fails()) {
@@ -72,13 +72,13 @@ class TradeJournalController extends Controller
 
         $user = Auth::user();
         $date = $request->input('date');
-        $cexAccountId = $request->input('cex_account_id');
+        $cexAccountId = (int) $request->input('cex_account_id');
 
         $query = TradeJournal::where('user_id', $user->id)
             ->where('trade_date', $date);
 
-        // Filter by CEX account if provided
-        if ($cexAccountId) {
+        // Filter by CEX account if provided and not "All Accounts" (-1)
+        if ($cexAccountId && $cexAccountId !== -1) {
             $query->where('cex_account_id', $cexAccountId);
         }
 
@@ -165,7 +165,7 @@ class TradeJournalController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'date' => 'required|date',
-            'cex_account_id' => 'nullable|integer|exists:user_cex_accounts,id',
+            'cex_account_id' => 'nullable|integer',
         ]);
 
         if ($validator->fails()) {
@@ -178,13 +178,13 @@ class TradeJournalController extends Controller
 
         $user = Auth::user();
         $date = $request->input('date');
-        $cexAccountId = $request->input('cex_account_id');
+        $cexAccountId = (int) $request->input('cex_account_id');
 
         $query = TradeJournal::where('user_id', $user->id)
             ->where('trade_date', $date);
 
-        // Filter by CEX account if provided
-        if ($cexAccountId) {
+        // Filter by CEX account if provided and not "All Accounts" (-1)
+        if ($cexAccountId && $cexAccountId !== -1) {
             $query->where('cex_account_id', $cexAccountId);
         }
 

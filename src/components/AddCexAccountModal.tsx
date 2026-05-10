@@ -205,6 +205,13 @@ const AddCexAccountModal: React.FC<AddCexAccountModalProps> = ({
       setSaveSuccess(true);
       setError('');
       
+      // Save the new account ID to localStorage immediately
+      // This prevents race condition with auto-restore logic
+      if (data.data && data.data.id) {
+        localStorage.setItem('selectedAccountId', data.data.id.toString());
+        console.log('💾 Saved new account ID to localStorage:', data.data.id);
+      }
+      
       // Call onSuccess to trigger parent refresh
       onSuccess();
       

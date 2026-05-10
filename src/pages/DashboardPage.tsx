@@ -17,7 +17,7 @@ import { usePortfolio } from '../context/PortfolioContext';
 import { apiService } from '../services/apiService';
 import { useTranslation } from 'react-i18next';
 import { CexAccount } from '../constants';
-import { useCexAccount } from '../context/CexAccountContext';
+import { useCexAccount, ALL_ACCOUNTS_ID } from '../context/CexAccountContext';
 import AddCexAccountModal from '../components/AddCexAccountModal';
 import SyncLoadingModal from '../components/SyncLoadingModal';
 import SuccessToast from '../components/SuccessToast';
@@ -27,7 +27,7 @@ interface DashboardPageProps {
 }
 
 const DashboardPage: React.FC<DashboardPageProps> = ({ formData }) => {
-  const { portfolioData, setPortfolioData } = usePortfolio();
+  const { portfolioData, setPortfolioData, lastSyncedAccountId, setLastSyncedAccountId } = usePortfolio();
   const { selectedAccount, setSelectedAccount: setSelectedAccountContext } = useCexAccount();
   const { t } = useTranslation();
   const [currentDate, setCurrentDate] = React.useState(new Date());
@@ -36,11 +36,6 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ formData }) => {
   const [dataErrors, setDataErrors] = useState<Record<string, string>>({});
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
-  const [lastSyncedAccountId, setLastSyncedAccountId] = useState<number | null>(() => {
-    // Restore last synced account ID from localStorage
-    const saved = localStorage.getItem('lastSyncedAccountId');
-    return saved ? parseInt(saved) : null;
-  });
   const isFirstMount = React.useRef(true);
   const [accountRefreshKey, setAccountRefreshKey] = useState(0);
 
@@ -64,7 +59,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ formData }) => {
     t('dashboard.december') || "December"
   ];
 
-  const handleResync = async (showToast: boolean = true) => {
+  const handleResync = async (showToast: boolean = true, fastMode: boolean = false) => {
     // Check if user has CEX account selected
     if (!selectedAccount) {
       setSyncError('No CEX account selected. Please add an account first.');
@@ -77,8 +72,19 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ formData }) => {
     setDataErrors({});
 
     try {
-      const token = localStorage.getItem('auth_token'); // Fixed: use 'auth_token'
-      const response = await fetch(`http://localhost:8000/api/cex-accounts/${selectedAccount.id}/sync`, {
+      const token = localStorage.getItem('auth_token');
+      const isAllAccounts = selectedAccount.id === ALL_ACCOUNTS_ID;
+      
+      let url = isAllAccounts 
+        ? 'http://localhost:8000/api/cex-accounts/sync-all'
+        : `http://localhost:8000/api/cex-accounts/${selectedAccount.id}/sync`;
+
+      // Add fast_mode parameter if requested
+      if (fastMode) {
+        url += (url.includes('?') ? '&' : '?') + 'fast_mode=1';
+      }
+
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -94,8 +100,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ formData }) => {
       setPortfolioData(data.data);
       setSyncError('');
       validatePortfolioData(data.data);
+      
       setLastSyncedAccountId(selectedAccount.id);
-      localStorage.setItem('lastSyncedAccountId', selectedAccount.id.toString()); // Persist to localStorage
       
       // Show success toast only if requested (not on initial load)
       if (showToast) {
@@ -191,23 +197,40 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ formData }) => {
     setDataErrors(errors);
   };
 
-  // Auto-sync when account changes (but not on initial mount if data already exists for THIS account)
+  // Auto-sync when account changes OR on first mount
   useEffect(() => {
     if (selectedAccount) {
-      // If this is first mount and we already have portfolio data FOR THIS ACCOUNT, skip sync
-      if (isFirstMount.current && portfolioData && lastSyncedAccountId === selectedAccount.id) {
+      const isAllAccounts = selectedAccount.id === ALL_ACCOUNTS_ID;
+
+      // Skip sync if we already have data for THIS exact account
+      if (portfolioData && lastSyncedAccountId === selectedAccount.id) {
+        console.log('✅ Using cached data for account:', selectedAccount.cex_display_name);
+        validatePortfolioData(portfolioData);
+        isFirstMount.current = false; 
+        return;
+      }
+
+      // First mount: Sync only if no data OR data is for different account
+      if (isFirstMount.current) {
         isFirstMount.current = false;
-        return; // Skip sync - data is already for this account
+        
+        if (portfolioData && lastSyncedAccountId === selectedAccount.id) {
+          console.log('✅ Found valid data on first mount, skipping sync');
+          return;
+        }
+
+        console.log('🔄 Initial auto-sync for account:', selectedAccount.cex_display_name);
+        handleResync(false, isAllAccounts);
+        return;
       }
       
-      // If account actually changed (different from last synced), do sync with toast
+      // Subsequent changes (manual account switch): Sync if account actually changed
       if (selectedAccount.id !== lastSyncedAccountId) {
-        const shouldShowToast = !isFirstMount.current; // Show toast only if not first mount
-        isFirstMount.current = false;
-        handleResync(shouldShowToast);
+        console.log('🔄 Account changed, syncing:', selectedAccount.cex_display_name);
+        handleResync(true, isAllAccounts);
       }
     }
-  }, [selectedAccount]);
+  }, [selectedAccount?.id, lastSyncedAccountId]); // Stable dependencies
 
   // Run validation on mount if data exists
   React.useEffect(() => {
@@ -631,7 +654,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ formData }) => {
               </thead>
               <tbody className="divide-y divide-neutral-800/50">
                 {portfolioData?.activeDeployments && portfolioData.activeDeployments.length > 0 ? (
-                  portfolioData.activeDeployments.map(trade => (
+                  portfolioData.activeDeployments.map((trade: any) => (
                     <TableRow
                       key={trade.id}
                       asset={trade.asset}
@@ -642,6 +665,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ formData }) => {
                       percent={trade.percent}
                       duration={trade.duration}
                       positive={trade.positive}
+                      exchange={trade.exchange}
                     />
                   ))
                 ) : (
@@ -779,7 +803,7 @@ const CalendarEmpty = () => (
   <div className="bg-neutral-900/30 p-4 h-32 opacity-20 border-r border-b border-neutral-800"></div>
 );
 
-const TableRow = ({ asset, type, entry, size, pnl, percent, duration, positive = false }: any) => (
+const TableRow = ({ asset, type, entry, size, pnl, percent, duration, positive = false, exchange }: any) => (
   <tr className="hover:bg-neutral-800/30 transition-colors group cursor-pointer">
     <td className="px-8 py-5">
       <div className="flex items-center gap-3">
@@ -787,7 +811,14 @@ const TableRow = ({ asset, type, entry, size, pnl, percent, duration, positive =
           {asset[0]}
         </div>
         <div>
-          <p className="text-xs font-black text-white mb-0.5 tracking-tight">{asset}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-xs font-black text-white mb-0.5 tracking-tight">{asset}</p>
+            {exchange && (
+              <span className="text-[8px] font-black bg-neutral-800 text-neutral-500 px-1.5 py-0.5 rounded-md border border-neutral-700 uppercase tracking-tighter">
+                {exchange}
+              </span>
+            )}
+          </div>
           <p className={`text-[9px] font-black uppercase tracking-widest ${positive ? 'text-green-600' : 'text-red-600'}`}>{type}</p>
         </div>
       </div>

@@ -47,6 +47,7 @@ const TopBar: React.FC<TopBarProps> = ({ name, avatarInitials, children, selecte
               selectedAccount={selectedAccount}
               onAccountChange={onAccountChange}
               onAddAccount={() => setIsAddModalOpen(true)}
+              refreshTrigger={effectiveRefreshKey}
             />
           )}
           

@@ -48,6 +48,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/cex-accounts/{id}', [CexAccountController::class, 'destroy']); // Delete CEX account
     Route::post('/cex-accounts/{id}/test', [CexAccountController::class, 'testConnection']); // Test connection
     Route::post('/cex-accounts/{id}/sync', [CexAccountController::class, 'sync']); // Sync specific account
+    Route::post('/cex-accounts/sync-all', [CexAccountController::class, 'syncAll']); // Sync all accounts (Unified View)
     Route::post('/cex-accounts/{id}/sync-trades', [CexAccountController::class, 'syncTrades']); // Sync trades to database
 });
 

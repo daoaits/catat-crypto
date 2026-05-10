@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { MessageSquare, BookOpen, MessageCircle, ChevronDown, CheckCircle2, MoveRight, Mail, X, Send } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import contact1 from '../../assets/contact1.png';
 
 export default function Contact() {
   const { t, i18n } = useTranslation();
@@ -191,7 +192,7 @@ export default function Contact() {
 
           {/* CTA */}
           <div className="bg-gradient-to-br from-[#2A0D0A] to-[#120505] border border-[#3A1410] rounded-[32px] p-12 md:p-16 flex items-center justify-between overflow-hidden relative mb-24 min-h-[400px] shadow-2xl max-w-[1000px] mx-auto">
-             <div className="relative z-10 w-full md:w-[60%]">
+             <div className="relative z-10 w-full md:w-[55%]">
                 <h3 className="text-[36px] md:text-[46px] font-bold text-white mb-6 leading-[1.1] tracking-tight">
                   {isId ? "Siap menjadi trader\nyang lebih baik?" : "Are You Ready to Become\na Better Trader?"}
                 </h3>
@@ -203,10 +204,14 @@ export default function Contact() {
                 </button>
              </div>
              
-             {/* Abstract art / Image Placeholder */}
-             <div className="absolute right-[-10%] md:right-0 top-0 bottom-0 w-[60%] md:w-1/2 flex items-center justify-end pr-0 md:pr-12 pointer-events-none">
-                <div className="w-[450px] h-[450px] bg-[#E26A59]/10 blur-[120px] rounded-full absolute right-0" />
-                <img src="https://images.unsplash.com/photo-1642398555940-02ba2e31505d?q=80&w=800&auto=format&fit=crop" alt="Trading UI mockup" className="w-[500px] h-[350px] object-cover rounded-3xl transform rotate-[-8deg] border border-[#4A1410] shadow-[0_30px_60px_rgba(0,0,0,0.5)] relative z-10 opacity-70 mix-blend-luminosity" />
+             {/* Robot Image */}
+             <div className="absolute right-[-5%] md:right-[2%] top-1/2 -translate-y-1/2 w-[45%] md:w-[40%] flex items-center justify-center pointer-events-none hidden md:flex">
+                <div className="w-[350px] h-[350px] bg-[#E26A59]/10 blur-[100px] rounded-full absolute" />
+                <img 
+                  src={contact1} 
+                  alt="Trading Robot Assistant" 
+                  className="w-full h-auto object-contain relative z-10 max-w-[350px] rounded-[32px] transform rotate-[8deg] hover:rotate-[4deg] transition-transform duration-500 border-2 border-[#E26A59]/50 shadow-[0_0_30px_rgba(226,106,89,0.4),0_0_60px_rgba(226,106,89,0.2)] hover:shadow-[0_0_40px_rgba(226,106,89,0.6),0_0_80px_rgba(226,106,89,0.3)]" 
+                />
              </div>
           </div>
        </div>

@@ -3,17 +3,17 @@ import { Activity, BookOpen, Calendar, Bot } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 interface FeaturesDropdownProps {
-  handleNavigate: (page: string) => void;
+  setCurrentPage: (page: string) => void;
 }
 
-export default function FeaturesDropdown({ handleNavigate }: FeaturesDropdownProps) {
+export default function FeaturesDropdown({ setCurrentPage }: FeaturesDropdownProps) {
   const { t } = useTranslation();
 
   return (
     <div className="relative group/nav h-full flex items-center">
       <a
         href="#"
-        onClick={(e) => { e.preventDefault(); handleNavigate('home'); }}
+        onClick={(e) => { e.preventDefault(); setCurrentPage('home'); }}
         className="text-[13px] font-semibold text-neutral-400 group-hover/nav:text-white transition-colors flex items-center gap-1 cursor-pointer h-full"
       >
         {t('nav.features')}
@@ -29,10 +29,7 @@ export default function FeaturesDropdown({ handleNavigate }: FeaturesDropdownPro
 
           <div className="space-y-3">
             {/* Dashboard */}
-            <div 
-              onClick={() => handleNavigate('home')}
-              className="bg-[#1A1111]/80 hover:bg-[#2A1715] border border-white/5 rounded-2xl p-4 flex items-center justify-between cursor-pointer transition-all group/item"
-            >
+            <div className="bg-[#1A1111]/80 hover:bg-[#2A1715] border border-white/5 rounded-2xl p-4 flex items-center justify-between cursor-pointer transition-all group/item">
               <div className="pr-4">
                 <div className="text-white font-bold text-[14px] mb-1 leading-tight">
                   Dashboard
@@ -67,10 +64,7 @@ export default function FeaturesDropdown({ handleNavigate }: FeaturesDropdownPro
             </div>
 
             {/* Reports */}
-            <div 
-              onClick={() => handleNavigate('home')}
-              className="bg-[#1A1111]/80 hover:bg-[#2A1715] border border-white/5 rounded-2xl p-4 flex items-center justify-between cursor-pointer transition-all group/item"
-            >
+            <div className="bg-[#1A1111]/80 hover:bg-[#2A1715] border border-white/5 rounded-2xl p-4 flex items-center justify-between cursor-pointer transition-all group/item">
               <div className="pr-4">
                 <div className="text-white font-bold text-[14px] mb-1 leading-tight">
                   Reports
@@ -92,10 +86,7 @@ export default function FeaturesDropdown({ handleNavigate }: FeaturesDropdownPro
             </div>
 
             {/* Trades */}
-            <div 
-              onClick={() => handleNavigate('home')}
-              className="bg-[#1A1111]/80 hover:bg-[#2A1715] border border-white/5 rounded-2xl p-4 flex items-center justify-between cursor-pointer transition-all group/item"
-            >
+            <div className="bg-[#1A1111]/80 hover:bg-[#2A1715] border border-white/5 rounded-2xl p-4 flex items-center justify-between cursor-pointer transition-all group/item">
               <div className="pr-4">
                 <div className="text-white font-bold text-[14px] mb-1 leading-tight">
                   Trades
@@ -125,10 +116,7 @@ export default function FeaturesDropdown({ handleNavigate }: FeaturesDropdownPro
             </div>
 
             {/* Notebook */}
-            <div 
-              onClick={() => handleNavigate('home')}
-              className="bg-[#1A1111]/80 hover:bg-[#2A1715] border border-white/5 rounded-2xl p-4 flex items-center justify-between cursor-pointer transition-all group/item"
-            >
+            <div className="bg-[#1A1111]/80 hover:bg-[#2A1715] border border-white/5 rounded-2xl p-4 flex items-center justify-between cursor-pointer transition-all group/item">
               <div className="pr-4">
                 <div className="text-white font-bold text-[14px] mb-1 leading-tight">
                   Notebook
@@ -163,10 +151,7 @@ export default function FeaturesDropdown({ handleNavigate }: FeaturesDropdownPro
 
           <div className="space-y-6 mb-auto pt-2">
             {/* Calendar */}
-            <div 
-              onClick={() => handleNavigate('home')}
-              className="flex gap-4 cursor-pointer group/item items-start"
-            >
+            <div className="flex gap-4 cursor-pointer group/item items-start">
               <div className="mt-0.5">
                 <Calendar
                   className="w-5 h-5 text-[#E26A59]"
@@ -184,10 +169,7 @@ export default function FeaturesDropdown({ handleNavigate }: FeaturesDropdownPro
             </div>
 
             {/* AI Assistant */}
-            <div 
-              onClick={() => handleNavigate('home')}
-              className="flex gap-4 cursor-pointer group/item items-start"
-            >
+            <div className="flex gap-4 cursor-pointer group/item items-start">
               <div className="mt-0.5">
                 <Bot className="w-5 h-5 text-[#E26A59]" strokeWidth={1.5} />
               </div>

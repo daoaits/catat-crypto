@@ -7,7 +7,7 @@ import Sidebar from '../components/Sidebar';
 import TopBar from '../components/TopBar';
 import RichTextEditor from '../components/RichTextEditor';
 import { usePortfolio } from '../context/PortfolioContext';
-import { useCexAccount } from '../context/CexAccountContext';
+import { useCexAccount, ALL_ACCOUNTS_ID } from '../context/CexAccountContext';
 import { apiService } from '../services/apiService';
 
 interface NotebookPageProps {
@@ -73,7 +73,8 @@ const NotebookPage: React.FC<NotebookPageProps> = ({ formData }) => {
         return;
       }
       
-      const response = await apiService.getJournals(currentYear, currentMonth, token, selectedAccount.id);
+      const accountId = selectedAccount.id === ALL_ACCOUNTS_ID ? undefined : selectedAccount.id;
+      const response = await apiService.getJournals(currentYear, currentMonth, token, accountId);
       if (response.success) {
         setJournals(response.data);
         
@@ -140,6 +141,11 @@ const NotebookPage: React.FC<NotebookPageProps> = ({ formData }) => {
 
   // Save journal
   const saveJournal = async () => {
+    if (selectedAccount?.id === ALL_ACCOUNTS_ID) {
+      setError('Please select a specific account to save a journal entry');
+      return;
+    }
+
     setIsSaving(true);
     setError(null);
     try {

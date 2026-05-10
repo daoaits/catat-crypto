@@ -15,6 +15,19 @@ interface CexAccountProviderProps {
   children: ReactNode;
 }
 
+export const ALL_ACCOUNTS_ID = -1;
+
+export const ALL_ACCOUNTS_OBJECT: CexAccount = {
+  id: ALL_ACCOUNTS_ID,
+  cex_name: 'all',
+  cex_display_name: 'All Accounts',
+  account_label: 'Unified View',
+  full_display_name: 'All Accounts - Unified View',
+  is_active: true,
+  last_synced_at: null,
+  created_at: new Date().toISOString(),
+};
+
 export const CexAccountProvider: React.FC<CexAccountProviderProps> = ({ children }) => {
   const [selectedAccount, setSelectedAccountState] = useState<CexAccount | null>(null);
   const [accounts, setAccounts] = useState<CexAccount[]>([]);
@@ -48,6 +61,11 @@ export const CexAccountProvider: React.FC<CexAccountProviderProps> = ({ children
         // Restore selected account from localStorage
         const savedId = localStorage.getItem('selectedAccountId');
         if (savedId) {
+          if (parseInt(savedId) === ALL_ACCOUNTS_ID) {
+            console.log('✅ CexAccountContext: Restored All Accounts mode');
+            setSelectedAccountState(ALL_ACCOUNTS_OBJECT);
+            return;
+          }
           const saved = data.data.find((acc: CexAccount) => acc.id === parseInt(savedId));
           if (saved) {
             console.log('✅ CexAccountContext: Restored saved account:', saved.cex_display_name);
