@@ -14,6 +14,37 @@ class IndodaxExchange implements ExchangeInterface
         return 'Indodax';
     }
 
+    private function getHttpClient()
+    {
+        $client = Http::withHeaders([
+            'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        ])
+        ->timeout(45)
+        ->connectTimeout(20);
+
+        // Force IPv4 to bypass some ISP issues and potential IPv6 handshake timeouts
+        $client->withOptions([
+            'curl' => [
+                CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4,
+            ],
+        ]);
+
+        // Support proxy if configured in .env
+        $proxy = env('HTTP_PROXY');
+        if ($proxy) {
+            $client->withOptions([
+                'proxy' => $proxy
+            ]);
+        }
+
+        // Handle SSL verification (useful for local dev with ISP blocking)
+        if (env('CURL_VERIFY_SSL', true) === false) {
+            $client->withoutVerifying();
+        }
+
+        return $client;
+    }
+
     public function validateCredentials(string $apiKey, string $apiSecret): bool
     {
         return !empty($apiKey) && !empty($apiSecret);
@@ -93,7 +124,7 @@ class IndodaxExchange implements ExchangeInterface
             $balancesHold = $accountData['return']['balance_hold'] ?? [];
 
             // Get ticker prices for IDR conversion
-            $tickerResponse = Http::get('https://indodax.com/api/summaries');
+            $tickerResponse = $this->getHttpClient()->get('https://indodax.com/api/summaries');
             $tickers = [];
             
             if ($tickerResponse->successful()) {
@@ -194,17 +225,14 @@ class IndodaxExchange implements ExchangeInterface
     private function makeRequest(string $method, array $params, string $apiKey, string $apiSecret): array
     {
         $params['method'] = $method;
-        $params['nonce'] = time() * 1000; // Milliseconds timestamp
-        
-        $postData = http_build_query($params);
-        $signature = hash_hmac('sha512', $postData, $apiSecret);
+        $params['nonce'] = round(microtime(true) * 1000);
+        $queryString = http_build_query($params);
+        $signature = hash_hmac('sha512', $queryString, $apiSecret);
 
-        $response = Http::asForm()
-            ->withHeaders([
-                'Key' => $apiKey,
-                'Sign' => $signature,
-            ])
-            ->post($this->baseUrl, $params);
+        $response = $this->getHttpClient()->withHeaders([
+            'Key' => $apiKey,
+            'Sign' => $signature,
+        ])->asForm()->post($this->baseUrl, $params);
 
         if (!$response->successful()) {
             $status = $response->status();

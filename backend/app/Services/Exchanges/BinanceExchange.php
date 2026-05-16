@@ -8,10 +8,47 @@ use Illuminate\Support\Facades\Log;
 class BinanceExchange implements ExchangeInterface
 {
     private string $baseUrl = 'https://api.binance.com';
+    private array $altBaseUrls = [
+        'https://api1.binance.com',
+        'https://api2.binance.com',
+        'https://api3.binance.com',
+        'https://data-api.binance.vision'
+    ];
 
     public function getName(): string
     {
         return 'Binance';
+    }
+
+    private function getHttpClient()
+    {
+        $client = Http::withHeaders([
+            'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        ])
+        ->timeout(45)
+        ->connectTimeout(20);
+
+        // Force IPv4 to bypass some ISP issues and potential IPv6 handshake timeouts
+        $client->withOptions([
+            'curl' => [
+                CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4,
+            ],
+        ]);
+
+        // Support proxy if configured in .env
+        $proxy = env('HTTP_PROXY');
+        if ($proxy) {
+            $client->withOptions([
+                'proxy' => $proxy
+            ]);
+        }
+
+        // Handle SSL verification (useful for local dev with ISP blocking)
+        if (env('CURL_VERIFY_SSL', true) === false) {
+            $client->withoutVerifying();
+        }
+
+        return $client;
     }
 
     public function validateCredentials(string $apiKey, string $apiSecret): bool
@@ -32,16 +69,33 @@ class BinanceExchange implements ExchangeInterface
             // Calculate start time (X days ago)
             $startTime = $timestamp - ($days * 24 * 60 * 60 * 1000);
 
-            // Get all trading symbols first
-            $exchangeInfoResponse = Http::get("{$this->baseUrl}/api/v3/exchangeInfo");
-            $symbols = [];
-            
-            if ($exchangeInfoResponse->successful()) {
-                $exchangeInfo = $exchangeInfoResponse->json();
-                foreach ($exchangeInfo['symbols'] as $symbolInfo) {
-                    if ($symbolInfo['status'] === 'TRADING' && str_ends_with($symbolInfo['symbol'], 'USDT')) {
-                        $symbols[] = $symbolInfo['symbol'];
+            // Try different base URLs
+            $urls = array_merge([$this->baseUrl], $this->altBaseUrls);
+            $exchangeInfoResponse = null;
+            $activeBaseUrl = $this->baseUrl;
+
+            foreach ($urls as $url) {
+                try {
+                    $exchangeInfoResponse = $this->getHttpClient()->get("{$url}/api/v3/exchangeInfo");
+                    if ($exchangeInfoResponse->successful()) {
+                        $activeBaseUrl = $url;
+                        break;
                     }
+                } catch (\Exception $e) {
+                    Log::warning("Binance: URL $url failed for exchangeInfo: " . $e->getMessage());
+                }
+            }
+
+            if (!$exchangeInfoResponse || !$exchangeInfoResponse->successful()) {
+                Log::warning("Binance: All URLs failed for exchangeInfo");
+                return [];
+            }
+
+            $symbols = [];
+            $exchangeInfo = $exchangeInfoResponse->json();
+            foreach ($exchangeInfo['symbols'] as $symbolInfo) {
+                if ($symbolInfo['status'] === 'TRADING' && str_ends_with($symbolInfo['symbol'], 'USDT')) {
+                    $symbols[] = $symbolInfo['symbol'];
                 }
             }
 
@@ -64,9 +118,9 @@ class BinanceExchange implements ExchangeInterface
                     $signature = hash_hmac('sha256', $queryString, $apiSecret);
 
                     // Store promise with symbol as key
-                    $promises[$symbol] = Http::withHeaders([
-                        'X-MBX-APIKEY' => $apiKey
-                    ])->async()->get("{$this->baseUrl}/api/v3/myTrades", [
+                    $promises[$symbol] = $this->getHttpClient()
+                        ->withHeaders(['X-MBX-APIKEY' => $apiKey])
+                        ->async()->get("{$activeBaseUrl}/api/v3/myTrades", [
                         'symbol' => $symbol,
                         'startTime' => $startTime,
                         'recvWindow' => $recvWindow,
@@ -189,19 +243,34 @@ class BinanceExchange implements ExchangeInterface
             $queryString = 'recvWindow=' . $recvWindow . '&timestamp=' . $timestamp;
             $signature = hash_hmac('sha256', $queryString, $apiSecret);
 
-            // Fetch Spot Account Balances
-            $accountResponse = Http::withHeaders([
-                'X-MBX-APIKEY' => $apiKey
-            ])->get("{$this->baseUrl}/api/v3/account", [
-                'recvWindow' => $recvWindow,
-                'timestamp' => $timestamp,
-                'signature' => $signature
-            ]);
+            // Try different base URLs
+            $urls = array_merge([$this->baseUrl], $this->altBaseUrls);
+            $accountResponse = null;
+            $activeBaseUrl = $this->baseUrl;
+
+            foreach ($urls as $url) {
+                try {
+                    $accountResponse = $this->getHttpClient()
+                        ->withHeaders(['X-MBX-APIKEY' => $apiKey])
+                        ->get("{$url}/api/v3/account", [
+                            'recvWindow' => $recvWindow,
+                            'timestamp' => $timestamp,
+                            'signature' => $signature
+                        ]);
+
+                    if ($accountResponse->successful()) {
+                        $activeBaseUrl = $url;
+                        break;
+                    }
+                } catch (\Exception $e) {
+                    Log::warning("Binance: URL $url failed for account: " . $e->getMessage());
+                }
+            }
 
             $spotBalances = [];
             $spotTotalUsdt = 0;
 
-            if ($accountResponse->successful()) {
+            if ($accountResponse && $accountResponse->successful()) {
                 $accountData = $accountResponse->json();
                 $spotBalances = collect($accountData['balances'])->filter(function ($b) {
                     return (float)$b['free'] > 0 || (float)$b['locked'] > 0;
@@ -255,8 +324,8 @@ class BinanceExchange implements ExchangeInterface
             }
 
             // Fetch All Ticker Prices
-            $tickerResponse = Http::get("{$this->baseUrl}/api/v3/ticker/price");
-            $tickers = [];
+            $tickerResponse = $this->getHttpClient()->get("{$activeBaseUrl}/api/v3/ticker/price");
+            $prices = [];
             if ($tickerResponse->successful()) {
                 foreach ($tickerResponse->json() as $t) {
                     $tickers[$t['symbol']] = (float)$t['price'];

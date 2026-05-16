@@ -7,11 +7,46 @@ use Illuminate\Support\Facades\Log;
 
 class TokocryptoExchange implements ExchangeInterface
 {
-    private string $baseUrl = 'https://www.tokocrypto.com';
+    private string $baseUrl = 'https://api.tokocrypto.com';
+    private array $altBaseUrls = [
+        'https://www.tokocrypto.com',
+        'https://www.tokocrypto.site'
+    ];
 
     public function getName(): string
     {
         return 'Tokocrypto';
+    }
+
+    private function getHttpClient()
+    {
+        $client = Http::withHeaders([
+            'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        ])
+        ->timeout(45) // Increased timeout
+        ->connectTimeout(20);
+
+        // Force IPv4 to bypass some ISP issues and potential IPv6 handshake timeouts
+        $client->withOptions([
+            'curl' => [
+                CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4,
+            ],
+        ]);
+
+        // Support proxy if configured in .env
+        $proxy = env('HTTP_PROXY');
+        if ($proxy) {
+            $client->withOptions([
+                'proxy' => $proxy
+            ]);
+        }
+
+        // Handle SSL verification (useful for local dev with ISP blocking)
+        if (env('CURL_VERIFY_SSL', true) === false) {
+            $client->withoutVerifying();
+        }
+
+        return $client;
     }
 
     public function validateCredentials(string $apiKey, string $apiSecret): bool
@@ -24,23 +59,37 @@ class TokocryptoExchange implements ExchangeInterface
         try {
             $trades = [];
             $timestamp = round(microtime(true) * 1000);
-            $startTime = $timestamp - ($days * 24 * 60 * 60 * 1000);
+            
+            // Try different base URLs
+            $urls = array_merge([$this->baseUrl], $this->altBaseUrls);
+            $accountResponse = null;
+            $lastError = '';
 
-            // Get account info first to get balances
-            $recvWindow = 60000;
-            $queryString = 'recvWindow=' . $recvWindow . '&timestamp=' . $timestamp;
-            $signature = hash_hmac('sha256', $queryString, $apiSecret);
+            foreach ($urls as $url) {
+                try {
+                    $recvWindow = 60000;
+                    $queryString = 'recvWindow=' . $recvWindow . '&timestamp=' . $timestamp;
+                    $signature = hash_hmac('sha256', $queryString, $apiSecret);
 
-            $accountResponse = Http::withHeaders([
-                'X-MBX-APIKEY' => $apiKey
-            ])->get("{$this->baseUrl}/open/v1/account", [
-                'recvWindow' => $recvWindow,
-                'timestamp' => $timestamp,
-                'signature' => $signature
-            ]);
+                    $accountResponse = $this->getHttpClient()
+                        ->withHeaders(['X-MBX-APIKEY' => $apiKey])
+                        ->get("{$url}/open/v1/account", [
+                            'recvWindow' => $recvWindow,
+                            'timestamp' => $timestamp,
+                            'signature' => $signature
+                        ]);
 
-            if (!$accountResponse->successful()) {
-                Log::warning('Tokocrypto: Failed to fetch account for trade history');
+                    if ($accountResponse->successful() && ($accountResponse->json()['code'] ?? -1) === 0) {
+                        break;
+                    }
+                    $lastError = "URL $url failed: " . $accountResponse->body();
+                } catch (\Exception $e) {
+                    $lastError = "URL $url exception: " . $e->getMessage();
+                }
+            }
+
+            if (!$accountResponse || !$accountResponse->successful()) {
+                Log::warning('Tokocrypto: Failed to fetch account for trade history. ' . $lastError);
                 return [];
             }
 
@@ -62,19 +111,34 @@ class TokocryptoExchange implements ExchangeInterface
             $queryString = 'recvWindow=' . $recvWindow . '&timestamp=' . $timestamp;
             $signature = hash_hmac('sha256', $queryString, $apiSecret);
 
-            // Fetch Spot Account Balances
-            $accountResponse = Http::withHeaders([
-                'X-MBX-APIKEY' => $apiKey
-            ])->get("{$this->baseUrl}/open/v1/account/spot", [
-                'recvWindow' => $recvWindow,
-                'timestamp' => $timestamp,
-                'signature' => $signature
-            ]);
+            // Fetch Spot Account Balances - Try different base URLs
+            $urls = array_merge([$this->baseUrl], $this->altBaseUrls);
+            $accountResponse = null;
+            $lastError = '';
+
+            foreach ($urls as $url) {
+                try {
+                    $accountResponse = $this->getHttpClient()
+                        ->withHeaders(['X-MBX-APIKEY' => $apiKey])
+                        ->get("{$url}/open/v1/account/spot", [
+                            'recvWindow' => $recvWindow,
+                            'timestamp' => $timestamp,
+                            'signature' => $signature
+                        ]);
+
+                    if ($accountResponse->successful() && ($accountResponse->json()['code'] ?? -1) === 0) {
+                        break;
+                    }
+                    $lastError = "URL $url failed: " . $accountResponse->body();
+                } catch (\Exception $e) {
+                    $lastError = "URL $url exception: " . $e->getMessage();
+                }
+            }
 
             $spotBalances = [];
             $spotTotalUsdt = 0;
 
-            if ($accountResponse->successful()) {
+            if ($accountResponse && $accountResponse->successful()) {
                 $accountData = $accountResponse->json();
                 
                 // Tokocrypto uses 'accountAssets' not 'balances'
@@ -97,18 +161,27 @@ class TokocryptoExchange implements ExchangeInterface
                 Log::warning('Tokocrypto Account API Error: ' . $accountResponse->body());
             }
 
-            // Fetch All Ticker Prices - Get BTC price from Binance as fallback
-            // Tokocrypto doesn't provide public ticker endpoint, so we use Binance
+            // Fetch All Ticker Prices - Use Tokocrypto site as primary, Binance as fallback
             $btcPrice = 0;
-            try {
-                $binanceResponse = Http::get('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT');
-                if ($binanceResponse->successful()) {
-                    $btcData = $binanceResponse->json();
-                    $btcPrice = (float)($btcData['price'] ?? 0);
-                    Log::info('Tokocrypto: BTC price from Binance: $' . number_format($btcPrice, 2));
+            $priceUrls = [
+                'https://www.tokocrypto.site/api/v3/ticker/price?symbol=BTCUSDT',
+                'https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT'
+            ];
+
+            foreach ($priceUrls as $priceUrl) {
+                try {
+                    $priceResponse = Http::timeout(10)->get($priceUrl);
+                    if ($priceResponse->successful()) {
+                        $priceData = $priceResponse->json();
+                        $btcPrice = (float)($priceData['price'] ?? 0);
+                        if ($btcPrice > 0) {
+                            Log::info("Tokocrypto: BTC price from $priceUrl: $" . number_format($btcPrice, 2));
+                            break;
+                        }
+                    }
+                } catch (\Exception $e) {
+                    Log::warning("Tokocrypto: Failed to fetch BTC price from $priceUrl: " . $e->getMessage());
                 }
-            } catch (\Exception $e) {
-                Log::warning('Tokocrypto: Failed to fetch BTC price: ' . $e->getMessage());
             }
 
             // Calculate Spot Balance in USDT using totalOfBtc

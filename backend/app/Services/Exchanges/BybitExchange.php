@@ -15,6 +15,37 @@ class BybitExchange implements ExchangeInterface
         return 'Bybit';
     }
 
+    private function getHttpClient()
+    {
+        $client = Http::withHeaders([
+            'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        ])
+        ->timeout(45)
+        ->connectTimeout(20);
+
+        // Force IPv4 to bypass some ISP issues and potential IPv6 handshake timeouts
+        $client = $client->withOptions([
+            'curl' => [
+                CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4,
+            ],
+        ]);
+
+        // Support proxy if configured in .env
+        $proxy = config('services.proxy.url') ?? env('HTTP_PROXY');
+        if ($proxy) {
+            $client = $client->withOptions([
+                'proxy' => $proxy
+            ]);
+        }
+
+        // Handle SSL verification (useful for local dev with ISP blocking)
+        if (env('CURL_VERIFY_SSL', true) === false) {
+            $client->withoutVerifying();
+        }
+
+        return $client;
+    }
+
     public function validateCredentials(string $apiKey, string $apiSecret): bool
     {
         return !empty($apiKey) && !empty($apiSecret);
@@ -87,7 +118,7 @@ class BybitExchange implements ExchangeInterface
         $queryString = http_build_query($params);
         $signature = $this->generateSignature($apiSecret, $timestamp, $apiKey, $queryString);
 
-        $response = Http::withHeaders([
+        $response = $this->getHttpClient()->withHeaders([
             'X-BAPI-API-KEY'    => $apiKey,
             'X-BAPI-SIGN'       => $signature,
             'X-BAPI-TIMESTAMP'  => $timestamp,
